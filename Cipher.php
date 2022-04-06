@@ -2,15 +2,19 @@
 
 /**
  *
+ * Cipher.php
+ *
  * Simple cipher class
  *
- * @author Jakub Zasański <jakub.zasanski.dev@gmail.com>
- * @copyright 2022 Jakub Zasański
+ * @link https://github.com/jakubzasanski/Cipher-PHP
+ * @version 1.0.0
  *
  * @license MIT License
  * @license https://opensource.org/licenses/MIT MIT License
  *
- * @version 1.0.0
+ * @author Jakub Zasański <jakub.zasanski.dev@gmail.com>
+ * @copyright 2022 Jakub Zasański
+ *
  */
 
 
