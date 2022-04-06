@@ -16,36 +16,36 @@
 
 class Cipher
 {
-    # Individual user crypt key storage in database
-    private $salt = 'example-salt-key';
+    private string $privateKey;
+    private string $hashAlgo = 'sha3-512';
+    private string $encryptMethod = 'aes-256-cbc-hmac-sha256';
+    private string $encryptHashAlgo = 'sha3-256';
+    private int $IvLength = 16;
 
-    # Global app crypt key storage in app
-    private $pepper = 'example-pepper-key';
-
-
-    public function __construct(string $salt = null, string $pepper = null)
+    public function __construct(string $private_key = null)
     {
-        if (!empty($salt)) {
-            $this->salt = $salt;
-        }
-
-        if (!empty($pepper)) {
-            $this->pepper = $pepper;
+        if (!empty($private_key)) {
+            $this->privateKey = $private_key;
         }
     }
 
     /*
      * Simple encrypt string
      * @param string
-     * @return string
+     * @return string|false
      */
-    public function Encrypt(string $string = null)
+    public function Encrypt(string $string = null): string|false
     {
         if (!empty($string)) {
-            $_return = $string;
-            //TODO::AES-256
+            $aes_256_key = hash($this->encryptHashAlgo, $this->privateKey, true);
 
-            return $_return;
+            $iv = openssl_random_pseudo_bytes($this->IvLength);
+
+            $cipher_text = openssl_encrypt($string, $this->encryptMethod, $aes_256_key, OPENSSL_RAW_DATA, $iv);
+
+            $hash = hash_hmac($this->encryptHashAlgo, $cipher_text . $iv, $aes_256_key, true);
+
+            return base64_encode($iv . $hash . $cipher_text);
         }
 
         return false;
@@ -54,15 +54,26 @@ class Cipher
     /*
      * Simple decrypt string
      * @param string
-     * @return string
+     * @return string|false
      */
-    public function Decrypt(string $string = null)
+    public function Decrypt(string $string = null): string|false
     {
         if (!empty($string)) {
-            $_return = $string;
-            //TODO::AES-256
+            $string = base64_decode($string);
 
-            return $_return;
+            $iv = substr($string, 0, $this->IvLength);
+
+            $hash = substr($string, $this->IvLength, $this->IvLength * 2);
+
+            $cipher_text = substr($string, $this->IvLength * 3);
+
+            $aes_256_key = hash($this->encryptHashAlgo, $this->privateKey, true);
+
+            if (!hash_equals(hash_hmac($this->encryptHashAlgo, $cipher_text . $iv, $aes_256_key, true), $hash)) {
+                return false;
+            } else {
+                return openssl_decrypt($cipher_text, $this->encryptMethod, $aes_256_key, OPENSSL_RAW_DATA, $iv);
+            }
         }
 
         return false;
@@ -71,22 +82,27 @@ class Cipher
     /*
      * Simple hash string
      * @param string
-     * @return string
+     * @return string|false
      */
-    public function HashString(string $string = null, bool $blackout = true)
+    public function HashString(string $string = null, bool $blackout = false): string|false
     {
         if (!empty($string)) {
-            if ($blackout) {
-                $result = '';
-                for ($i = 0; $i < strlen($string); $i++) {
-                    $result .= substr($string, $i, 1);
-                    $result .= substr($this->salt, ($i % strlen($this->salt)) - 1, 1);
+            if ($blackout and $this->privateKey) {
+                $part1 = $part2 = '';
+
+                for ($j = 0; $j < strlen($string); $j++) {
+                    $chr1 = substr($string, $j, 1);
+                    $chr2 = substr($this->privateKey, ($j % strlen($this->privateKey)) - 1, 1);
+                    $part1 .= chr(ord($chr1) - ord($chr2));
+                    $part2 .= chr(ord($chr1) + ord($chr2));
                 }
+
+                $result = $part2 . hash($this->hashAlgo, $part1);
             } else {
                 $result = $string;
             }
 
-            return hash('sha512', $result);
+            return hash($this->hashAlgo, $result);
         }
 
         return false;
@@ -95,12 +111,12 @@ class Cipher
     /*
     * Simple hash string
     * @param string
-    * @return string
+    * @return string|false
     */
-    public function HashPassword(string $string = null)
+    public function HashPassword(string $string = null): string|false
     {
         if (!empty($string)) {
-            return $this->Encrypt(password_hash($this->HashString($string), '2y', ['cost' => 10]));
+            return $this->Encrypt(password_hash($this->HashString($string, true), '2y', ['cost' => 10]));
         }
 
         return false;
@@ -109,40 +125,15 @@ class Cipher
     /*
      * Simple verify hash string
      * @param string
-     * @return string
+     * @return bool
      */
-    public function VerifyPassword(string $string = null, string $hash = null)
+    public function VerifyPassword(string $string = null, string $hash = null): bool
     {
-        if (!empty($string) and !empty($hash) and password_verify($this->HashString($string), $this->Decrypt($hash))) {
+        if (!empty($string) and !empty($hash) and password_verify($this->HashString($string, true), $this->Decrypt($hash))) {
             return true;
+        } else {
+            return false;
         }
-
-        return false;
-    }
-
-    /*
-    * Generate Encryptor salt
-    */
-    public function GenSalt()
-    {
-        $this->salt = bin2hex(random_bytes(32));
-    }
-
-    /*
-    * Set Encryptor salt
-    */
-    public function SetSalt(string $salt = null)
-    {
-        $this->salt = $salt;
-    }
-
-    /*
-     * Get Encryptor salt
-     * @return string
-     */
-    public function GetSalt()
-    {
-        return $this->salt;
     }
 }
 
